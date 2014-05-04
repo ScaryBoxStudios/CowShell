@@ -62,6 +62,10 @@ int main(int argc, char* argv[])
 	/* The prompt string before the space that the user will enter his command */
 	char* prompt_string = "CowShell>";
 
+	/* To avoid unused param warning */
+	(void)(argc);
+	(void)(argv);
+
 	/* Main program loop */
 	do 
 	{
