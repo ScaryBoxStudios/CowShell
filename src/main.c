@@ -30,29 +30,37 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+
 /**
  * strip_newline - Removes newline character if exists from the end of a C string
  * 
  * (str) The C string to remove the newline character
- * # Returns 0 on success and 1 on error 
+ * # Returns 0 on success and -1 on error 
  */
 int strip_newline(char* str)
 {
 	size_t length;
+
+	/* if param invalid return error */
+	if (!str)
+		return -1;
 	
 	/* Get the original length of the string */
 	length = strlen(str);
 	
+	/* Set length to he index of the last char */
 	length = length - 1;
 
 	/* Check if the string has a new line in the end */
 	if (str[length] != '\n')
 		return -1;
 
+	/* Overwrite the newline with a null, effectively truncating the string */
 	str[length] = '\0'; 
 	
 	return 0;	
 }
+
 
 /**
  * count_tokens - Takes a shell command and returns the number of tokens
@@ -85,18 +93,20 @@ int count_tokens(char* str)
 			{
 				if (inside_word)
 				{
-					inside_word = 0; count++;
+					inside_word = 0;
+					count++;
 				}
 				break;
+			}
 			default:
 				inside_word = 1;
-			}
 		}
 	}
 	while(*it++);
 	
 	return count;
 }
+
 
 /**
  * prepare_argv - Takes the shell command and prepares its argument vector
@@ -131,10 +141,11 @@ void prepare_argv(char* command, char* argv[], int tok_count)
 		argv[i] = malloc(tok_sz + 1);
 		memcpy(argv[i], cur_token, tok_sz + 1);
 	}
-	
-	if(i != 0)
-		argv[i] = 0;
+
+	/* Set last element of the array to null */	
+	argv[i] = 0;
 }
+
 
 /**
  * unprepare_argv - Frees memory allocated by prepare_argv for a created vector
@@ -167,6 +178,7 @@ void print_argv(int argc, char* argv[])
 		printf("argv[%d]=%s\n", i, argv[i]);
 }
 #endif
+
 
 /**
  * handle_command - Executes the given command
@@ -229,6 +241,7 @@ void handle_command(char* command)
 		perror("fork");
 	}
 }
+
 
 int main(int argc, char* argv[])
 {
