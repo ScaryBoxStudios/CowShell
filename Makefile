@@ -3,12 +3,25 @@
 #################################
 
 CC := gcc
-CFLAGS := -O2 -Wall -Wextra -pedantic
-LFLAGS := 
-INCDIR := -I./src/
-LIBDIR :=
-INCLIB :=
 
+mode ?= debug
+ifeq ($(mode), release)
+	# Release settings
+	CFLAGS := -O2 -Wall -Wextra -pedantic
+	LFLAGS := 
+	INCDIR := -I./src/
+	LIBDIR :=
+	INCLIB :=
+else
+	# Debug settings
+	CFLAGS := -O0 -g -Wall -Wextra -pedantic -D_DEBUG
+	LFLAGS := 
+	INCDIR := -I./src/
+	LIBDIR :=
+	INCLIB :=
+endif
+
+# Debug settings
 
 #################################
 #	Project options		#
@@ -33,15 +46,19 @@ SRCFILES := $(call rwildcard, $(SRCDIR)/, *.c)
 # List of compile targets
 TARGETS := $(basename $(notdir $(SRCFILES)))
 
+
 .PHONY : clean
 
-all: $(TARGETS)
+all: info $(TARGETS)
 	@echo Linking $(PROJNAME) . . .
 	@$(CC) $(CFLAGS) $(LFLAGS) $(INCDIR) $(LIBDIR) -o $(OUTDIR)/$(PROJNAME) $(INTDIR)/*.o $(INCLIB)
-
+	
 % :
 	@echo Compiling $@ . . .
 	@$(CC) $(CFLAGS) $(INCDIR) -c $(shell echo $(SRCFILES) | grep -o -P "\S+/$@\.\S+") -o $(INTDIR)/$@.o
+
+info:
+	@echo Building in $(mode) mode . . .
 
 list :
 	@echo $(SRCFILES)
