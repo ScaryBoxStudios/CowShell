@@ -98,6 +98,59 @@ int count_tokens(char* str)
 	return count;
 }
 
+/**
+ * prepare_argv - Takes the shell command and prepares its argument vector
+ *
+ * (command) The shell command to analyze
+ * # Returns a pointer to an array of dynamically allocated C strings
+ */
+void prepare_argv(char* command, char* argv[], int tok_count)
+{
+	/* Loop counter */
+	int i = 0;
+
+	/* Current token size */
+	int tok_sz;
+
+	/* Pointer to current strtok token */
+	char* cur_token;
+
+	/* Get first token */
+	cur_token = strtok(command, " \t");
+	
+	/* Store first token */
+	tok_sz = strlen(cur_token);
+	argv[0] = malloc(tok_sz + 1);
+	memcpy(argv[0], cur_token, tok_sz + 1);
+
+	/* Get remaining tokens */
+	for(i = 1; i < tok_count; i++)
+	{
+		cur_token = strtok(0, " \t");
+		tok_sz = strlen(cur_token);
+		argv[i] = malloc(tok_sz + 1);
+		memcpy(argv[i], cur_token, tok_sz + 1);
+	}
+	
+	if(i != 0)
+		argv[i] = 0;
+}
+
+#ifdef _DEBUG
+/**
+ * print_argv - Debug function used to print the argument vector
+ *
+ *
+ */
+void print_argv(int argc, char* argv[])
+{
+	/* The loop counter */
+	int i;
+	
+	for(i = 0; i < argc; i++)
+		printf("argv[%d]=%s\n", i, argv[i]);
+}
+#endif
 
 /**
  * handle_command - Executes the given command
@@ -115,6 +168,9 @@ void handle_command(char* command)
 	/* The tokens count */
 	int tok_count;
 
+	/* The tokens array */
+	char** tok;
+
 	tok_count = count_tokens(command);
 
 	if (tok_count == 1)
@@ -123,16 +179,31 @@ void handle_command(char* command)
 		if (pid == 0)
 		{
 			/* Code executed by child process */
-			printf("Child: %s\n", command);
-			/* Exit child process */
-			exit(0);
+
+			/* Prepare argv */
+			tok = malloc(sizeof(char*) * (tok_count + 1));
+			prepare_argv(command, tok, tok_count);	
+#ifdef _DEBUG
+			print_argv(tok_count, tok);
+			printf("Child executing command: %s\n", command);
+#endif
+			if (execvp(command, tok) == -1)
+			{
+				perror("exec");
+				exit(-1);
+			}
 		}
 		else if (pid > 0)
 		{
 			/* Code executed by parent process */
+
+#ifdef _DEBUG
 			printf("Parent waiting for pid #%d\n", pid);
+#endif
 			wait(&status);
+#ifdef _DEBUG
 			printf("Child with pid #%d has returned with status %d\n", pid, status);
+#endif
 		}
 		else
 		{
