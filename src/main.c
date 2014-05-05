@@ -136,6 +136,22 @@ void prepare_argv(char* command, char* argv[], int tok_count)
 		argv[i] = 0;
 }
 
+/**
+ * unprepare_argv - Frees memory allocated by prepare_argv for a created vector
+ *
+ * (argc) The vector size
+ * (argc) The vector to free
+ */
+void unprepare_argv(int argc, char* argv[])
+{
+	/* Loop counter */
+	int i;
+
+	for(i = 0; i < argc; i++)
+		free(argv[i]);
+}
+
+
 #ifdef _DEBUG
 /**
  * print_argv - Debug function used to print the argument vector
@@ -187,6 +203,11 @@ void handle_command(char* command)
 #endif
 		if (execvp(command, tok) == -1)
 		{
+			/* If exec returns (on error) we need to deallocate the resources, because the current process is not thrown away */
+			unprepare_argv(tok_count, tok);
+			free(tok);
+			
+			/* Handle the exec error */
 			perror("exec");
 			exit(-1);
 		}
