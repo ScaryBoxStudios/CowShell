@@ -173,46 +173,39 @@ void handle_command(char* command)
 
 	tok_count = count_tokens(command);
 
-	if (tok_count == 1)
+	pid = fork();
+	if (pid == 0)
 	{
-		pid = fork();
-		if (pid == 0)
-		{
-			/* Code executed by child process */
+		/* Code executed by child process */
 
-			/* Prepare argv */
-			tok = malloc(sizeof(char*) * (tok_count + 1));
-			prepare_argv(command, tok, tok_count);	
+		/* Prepare argv */
+		tok = malloc(sizeof(char*) * (tok_count + 1));
+		prepare_argv(command, tok, tok_count);	
 #ifdef _DEBUG
-			print_argv(tok_count, tok);
-			printf("Child executing command: %s\n", command);
+		print_argv(tok_count, tok);
+		printf("Child executing command: %s\n", command);
 #endif
-			if (execvp(command, tok) == -1)
-			{
-				perror("exec");
-				exit(-1);
-			}
-		}
-		else if (pid > 0)
+		if (execvp(command, tok) == -1)
 		{
-			/* Code executed by parent process */
-
-#ifdef _DEBUG
-			printf("Parent waiting for pid #%d\n", pid);
-#endif
-			wait(&status);
-#ifdef _DEBUG
-			printf("Child with pid #%d has returned with status %d\n", pid, status);
-#endif
-		}
-		else
-		{
-			perror("fork");
+			perror("exec");
+			exit(-1);
 		}
 	}
-	else if(tok_count > 1)
+	else if (pid > 0)
 	{
-		printf("Command line arguments not supported!\n");
+		/* Code executed by parent process */
+
+#ifdef _DEBUG
+		printf("Parent waiting for pid #%d\n", pid);
+#endif
+		wait(&status);
+#ifdef _DEBUG
+		printf("Child with pid #%d has returned with status %d\n", pid, status);
+#endif
+	}
+	else
+	{
+		perror("fork");
 	}
 }
 
