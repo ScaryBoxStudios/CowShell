@@ -27,97 +27,125 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <sys/wait.h>
 
 
 /**
- * strip_newline - Removes newline character if exists from the end of a C string
- * 
- * (str) The C string to remove the newline character
+ * struct TOKENDATA - A structure that stores the results of the splitstr function
+ *
+ * (tokens) A pointer used as a dynamically allocated array to dynamically allocated strings
+ * (count) The number of dynamically allocated strings in the tokens array
+ */
+typedef struct TOKENDATA
+{
+	char** tokens;
+	int count;
+} TOKENDATA;
+
+
+/**
+ * strip_sur_whitespace - Removes the surrounding whitespace from a C String
+ *
+ * (str) the C string to process
  * # Returns 0 on success and -1 on error 
  */
-int strip_newline(char* str)
+int strip_sur_whitespace(char* str)
 {
-	size_t length;
+	/* An iterator */
+	char* it;
+
+	/* Holds the number of leading whitespace */
+	int lead_wsp;
 
 	/* if param invalid return error */
 	if (!str)
 		return -1;
-	
-	/* Get the original length of the string */
-	length = strlen(str);
-	
-	/* Set length to he index of the last char */
-	length = length - 1;
 
-	/* Check if the string has a new line in the end */
-	if (str[length] != '\n')
-		return -1;
+	it = str;
 
-	/* Overwrite the newline with a null, effectively truncating the string */
-	str[length] = '\0'; 
+	/* Set iterator to the end of the string */
+	while(*it != '\0')
+		it++;
+
+	/* Strip trailing whitespace */
+	it--;
+	while(isspace(*it))
+	{
+		*it = '\0';
+		it--;
+	}
 	
-	return 0;	
+	/* Strip leading whitespace */
+	it = str;
+	lead_wsp = 0;
+	while(isspace(*it))
+	{
+		lead_wsp++;
+		it++;
+	}
+
+	if(lead_wsp != 0)
+	{
+		while(*it)
+		{
+			*(it - lead_wsp) = *it;
+			it++;
+		}
+		*(it - lead_wsp) = '\0';
+	}			
+	
+	return 0;
 }
 
 
 /**
- * count_tokens - Takes a shell command and returns the number of tokens
+ * tokcount - Takes a c string and some delimeters and counts the number of tokens the string will produce if we split it among them
  *
- * (srt) The C string with the shell command
- * # Returns the number of tokens in the string
+ * (str) The string to split
+ * (delims) The delimeters
+ * # Returns the number of tokens contained in the string or -1 if error occured
  */
-int count_tokens(char* str)
+int tokcount(char* str, char* delims)
 {
-	/* The current token count */
-	int count;
+	/* The total count */
+	int count = 1;
 
-	/* Status flag indicating if we are inside a token */
-	int inside_word;
+	/* Temp buffer */
+	char* buf;
 
-	/* An iterator for the string */
-	char* it;
+	buf = malloc(sizeof(char) * (strlen(str) + 1));
+	memcpy(buf, str, strlen(str) + 1);
 
-	count = 0;
-	inside_word = 0;
-	it = str;
+	/* Return -1 on invalid params */
+	if(!str || !delims)
+		return -1;
 
-	do
-	{
-		switch(*it)
-		{
-			case '\0':
-			case ' ':
-			case '\t':
-			{
-				if (inside_word)
-				{
-					inside_word = 0;
-					count++;
-				}
-				break;
-			}
-			default:
-				inside_word = 1;
-		}
-	}
-	while(*it++);
-	
+	strtok(buf, delims);
+	while(strtok(0, delims))
+		count++;
+
+	free(buf);
+
 	return count;
 }
 
 
 /**
- * prepare_argv - Takes the shell command and prepares its argument vector
+ * splitstr - Takes a c string and some delimeters and splits the string to them. Creates an array with the dynamically allocated substrings.
  *
- * (command) The shell command to analyze
- * # Returns a pointer to an array of dynamically allocated C strings
+ * (str) The string to split
+ * (delims) The delimeters
+ * # Returns a TOKENDATA dynamically allocated struct with the results
  */
-void prepare_argv(char* command, char* argv[], int tok_count)
+TOKENDATA* splitstr(char* str, char* delims)
 {
 	/* Loop counter */
 	int i = 0;
+
+	/* The token data */
+	TOKENDATA* td;
 
 	/* Current token size */
 	int tok_sz;
@@ -125,59 +153,51 @@ void prepare_argv(char* command, char* argv[], int tok_count)
 	/* Pointer to current strtok token */
 	char* cur_token;
 
+	td = malloc(sizeof(TOKENDATA));
+
+	/* Get count of all tokens */
+	td->count = tokcount(str, delims);
+
+	/* Allocate the array of C strings */
+	td->tokens = malloc(sizeof(char*) * (td->count + 1));
+
 	/* Get first token */
-	cur_token = strtok(command, " \t");
+	cur_token = strtok(str, delims);
 	
 	/* Store first token */
 	tok_sz = strlen(cur_token);
-	argv[0] = malloc(tok_sz + 1);
-	memcpy(argv[0], cur_token, tok_sz + 1);
+	(td->tokens)[0] = malloc(tok_sz + 1);
+	memcpy((td->tokens)[0], cur_token, tok_sz + 1);
 
 	/* Get remaining tokens */
-	for(i = 1; i < tok_count; i++)
+	for(i = 1; i < td->count; i++)
 	{
-		cur_token = strtok(0, " \t");
+		cur_token = strtok(0, delims);
 		tok_sz = strlen(cur_token);
-		argv[i] = malloc(tok_sz + 1);
-		memcpy(argv[i], cur_token, tok_sz + 1);
+		(td->tokens)[i] = malloc(tok_sz + 1);
+		memcpy((td->tokens)[i], cur_token, tok_sz + 1);
 	}
-
-	/* Set last element of the array to null */	
-	argv[i] = 0;
-}
-
-
-/**
- * unprepare_argv - Frees memory allocated by prepare_argv for a created vector
- *
- * (argc) The vector size
- * (argc) The vector to free
- */
-void unprepare_argv(int argc, char* argv[])
-{
-	/* Loop counter */
-	int i;
-
-	for(i = 0; i < argc; i++)
-		free(argv[i]);
-}
-
-
-#ifdef _DEBUG
-/**
- * print_argv - Debug function used to print the argument vector
- *
- *
- */
-void print_argv(int argc, char* argv[])
-{
-	/* The loop counter */
-	int i;
 	
-	for(i = 0; i < argc; i++)
-		printf("argv[%d]=%s\n", i, argv[i]);
+	/* Fill the after last pos with null to be compatitible with exec */
+	(td->tokens)[i] = 0;
+	
+	return td;
 }
-#endif
+
+
+/**
+ * destroy_tokendata - Deallocates memory allocated by a splitstr call
+ *
+ * (data) A TOKENDATA pointer pointing to the structure to deallocate
+ */
+void destroy_tokendata(TOKENDATA* data)
+{
+	int i;
+	for(i = 0; i < data->count; i++)
+		free(data->tokens[i]);
+	free(data->tokens);
+	free(data);
+}
 
 
 /**
@@ -193,32 +213,22 @@ void handle_command(char* command)
 	/* The status of the terminated child process */
 	int status;
 
-	/* The tokens count */
-	int tok_count;
-
-	/* The tokens array */
-	char** tok;
-
-	tok_count = count_tokens(command);
+	/* The tokens of the current command */
+	TOKENDATA* tok_dt;
 
 	pid = fork();
 	if (pid == 0)
 	{
 		/* Code executed by child process */
-
-		/* Prepare argv */
-		tok = malloc(sizeof(char*) * (tok_count + 1));
-		prepare_argv(command, tok, tok_count);	
+		tok_dt = splitstr(command, " \t");
 #ifdef _DEBUG
-		print_argv(tok_count, tok);
 		printf("Child executing command: %s\n", command);
 #endif
-		if (execvp(command, tok) == -1)
+		if (execvp(command, tok_dt->tokens) == -1)
 		{
 			/* If exec returns (on error) we need to deallocate the resources, because the current process is not thrown away */
-			unprepare_argv(tok_count, tok);
-			free(tok);
-			
+			destroy_tokendata(tok_dt);		
+	
 			/* Handle the exec error */
 			perror("exec");
 			exit(-1);
@@ -275,8 +285,8 @@ int main(int argc, char* argv[])
 		
 		if (fgets(command, sizeof(command), stdin) != 0)
 		{
-			/* Strip newline character */
-			strip_newline(command);	
+			/* Strip surrounding whitespace */
+			strip_sur_whitespace(command);	
 			
 			/* Check if it is the embedded exit command */
 			if (strcmp(command, exit_command) == 0)
