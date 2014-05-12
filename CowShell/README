@@ -4,11 +4,16 @@
 ||			||
 ==========================
 
-CowShell Documentation v0.1
+CowShell Documentation v0.2
 
 Usage:
 1) Compile by executing makefile
 2) Run executable created inside bin
 3) ???
 4) Profit
+
+
+* Makefile params *
+mode - Can be set to either "release" or "debug" thus disabling or enabling some debug logging
+e.g. make mode=release
 
