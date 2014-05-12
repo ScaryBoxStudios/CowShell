@@ -147,22 +147,34 @@ TOKENDATA* splitstr(char* str, char* delims)
 	/* The token data */
 	TOKENDATA* td;
 
+	/* The length of the string */
+	int length;
+
 	/* Current token size */
 	int tok_sz;
+
+	/* Copy of the str */
+	char* str_clone;
 
 	/* Pointer to current strtok token */
 	char* cur_token;
 
+	/* Make an str copy in str_clone because strtok modifies the string passed */
+	length = strlen(str);
+	str_clone = malloc(sizeof(char) * length + 1);
+	memcpy(str_clone, str, length + 1);
+
+	/* Allocate space for the results */
 	td = malloc(sizeof(TOKENDATA));
 
 	/* Get count of all tokens */
-	td->count = tokcount(str, delims);
+	td->count = tokcount(str_clone, delims);
 
 	/* Allocate the array of C strings */
 	td->tokens = malloc(sizeof(char*) * (td->count + 1));
 
 	/* Get first token */
-	cur_token = strtok(str, delims);
+	cur_token = strtok(str_clone, delims);
 	
 	/* Store first token */
 	tok_sz = strlen(cur_token);
@@ -181,6 +193,9 @@ TOKENDATA* splitstr(char* str, char* delims)
 	/* Fill the after last pos with null to be compatitible with exec */
 	(td->tokens)[i] = 0;
 	
+	/* Free the temporary string clone */
+	free(str_clone);
+
 	return td;
 }
 
@@ -201,57 +216,173 @@ void destroy_tokendata(TOKENDATA* data)
 
 
 /**
- * handle_command - Executes the given command
+ * check_pipes - Takes a full command and checks if the pipe usage is valid
+ *
+ * (command) The command to check
+ * # Returns 0 on success and -1 on error
+ */
+int check_pipes(char* command)
+{
+	/* The command length */
+	size_t length;
+
+	/* An iterator */
+	char* it;
+
+	int flag;
+
+	length = strlen(command);
+
+	/* Check that the command does not start or end with a pipe */
+	if ((command[0] == '|') || (command[length - 1] == '|'))
+		return -1;
+
+	/* Check that between pipes there is always something */
+	it = command;
+	flag = 0;
+	while(*it++)
+	{
+		if(flag == 0)
+		{
+			if(*it == '|')
+				flag = 1;
+		}
+		else if(flag == 1)
+		{
+			if(*it == '|')
+				return -1;
+			else if(!isspace(*it))
+				flag = 0;
+		}
+	}
+	return 0;
+}
+
+
+/**
+ * exec_command - Executes given command by calling exec system call
+ *
+ * (command) The simple command to execute (only executable + params)
+ */
+void exec_command(char* command)
+{
+	/* The tokens of the current command */
+	TOKENDATA* tok_dt;
+
+	/* Code executed by child process */
+	tok_dt = splitstr(command, " \t");
+#ifdef _DEBUG
+	printf("Child executing command: %s\n", command);
+#endif
+	if (execvp(tok_dt->tokens[0], tok_dt->tokens) == -1)
+	{
+		/* If exec returns (on error) we need to deallocate the resources, because the current process is not thrown away */
+		destroy_tokendata(tok_dt);		
+
+		/* Handle the exec error */
+		perror("exec");
+		exit(-1);
+	}
+}
+
+/**
+ * check_syntax - Checks for the validity of a command
+ *
+ * (command) The full command to check
+ * # Returns 0 on success and -1 on error
+ */
+int check_syntax(char* command)
+{
+	/* Check for correct pipe usage */
+	if (check_pipes(command) == -1)
+		return -1;
+
+	return 0;
+}
+
+
+/**
+ * handle_command - Analyses and executes the given complex command
  *
  * (command) The shell command to handle
  */
 void handle_command(char* command)
 {
+	/* A structure holding the individual simple commands */
+	TOKENDATA* commands;
+
 	/* The var holding the pid of the child processes */
 	pid_t pid;
 
 	/* The status of the terminated child process */
 	int status;
 
-	/* The tokens of the current command */
-	TOKENDATA* tok_dt;
+	/* Loop counter */
+	int i;
 
-	pid = fork();
-	if (pid == 0)
+	/* Pointers to previous and current pipes */
+	int old_pp[2], new_pp[2];
+
+	/* Split the complex piped command to simple ones */
+	commands = splitstr(command, "|");
+
+	/* Execute the commands */
+	for (i = 0; i < commands->count; i++)
 	{
-		/* Code executed by child process */
-		tok_dt = splitstr(command, " \t");
-#ifdef _DEBUG
-		printf("Child executing command: %s\n", command);
-#endif
-		if (execvp(command, tok_dt->tokens) == -1)
+		if(i != commands->count - 1)
+			pipe(new_pp);
+
+		pid = fork();
+		if (pid == 0)
 		{
-			/* If exec returns (on error) we need to deallocate the resources, because the current process is not thrown away */
-			destroy_tokendata(tok_dt);		
-	
-			/* Handle the exec error */
-			perror("exec");
-			exit(-1);
+			if (i != 0)
+			{
+				dup2(old_pp[0], 0);
+				close(old_pp[0]);
+				close(old_pp[1]);
+			}
+			if (i != commands->count - 1)
+			{	
+				close(new_pp[0]);
+				dup2(new_pp[1], 1);
+				close(new_pp[1]);
+			}
+
+			exec_command(commands->tokens[i]);
+		}
+		else if (pid > 0)
+		{
+			if (i != 0)
+			{
+				close(old_pp[0]);
+				close(old_pp[1]);
+			}
+			if (i != commands->count - 1)
+				old_pp[0] = new_pp[0]; old_pp[1] = new_pp[1];	
+		}			
+		else if (pid < 0)
+		{
+			perror("fork");
 		}
 	}
-	else if (pid > 0)
-	{
-		/* Code executed by parent process */
 
-#ifdef _DEBUG
-		printf("Parent waiting for pid #%d\n", pid);
-#endif
-		wait(&status);
+	if (commands->count > 1)
+	{
+		close(old_pp[0]);
+		close(old_pp[1]);
+	}
+
+	/* Wait for the childs */
+	for(i = 0; i < commands->count; i++)
+	{
+		pid = wait(&status);
 #ifdef _DEBUG
 		printf("Child with pid #%d has returned with status %d\n", pid, status);
 #endif
 	}
-	else
-	{
-		perror("fork");
-	}
+	/* Free the token data */
+	destroy_tokendata(commands);
 }
-
 
 int main(int argc, char* argv[])
 {
@@ -294,10 +425,17 @@ int main(int argc, char* argv[])
 				on_exit = 1;
 				break;	
 			}
-			else
+			else if (strcmp(command, "") != 0)
 			{
-				/* Pass command to handler */
-				handle_command(command);
+				if (check_syntax(command) != -1)
+				{
+					/* Pass command to handler */
+					handle_command(command);
+				}
+				else
+				{
+					printf("Invalid command syntax.\n");
+				}
 			}
 		}
 		else
