@@ -20,7 +20,7 @@
 /*               or read LICENCE file.                                                                                */
 /*                                                                                                                    */
 /*      Authors: Agorgianitis Loukas <agorg_louk@icloud.com>                                                          */
-/*               Vlahakis Dimitris   <HeroPP7@gmail.com>                                                              */
+/*               Vlahakis Dimitris   <dimitrisvlh@gmail.com>                                                              */
 /*                                                                                                                    */
 /**********************************************************************************************************************/
 
